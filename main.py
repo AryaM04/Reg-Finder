@@ -3,38 +3,60 @@ import re
 from bs4 import BeautifulSoup
 from itertools import product
 
-# Function to get vehicle model by scraping carcheck.co.uk
+###############################################################################
+# UK Vehicle Registration Plate Finder
+# This script generates all possible valid UK registration plates based on a pattern
+# with wildcards (?). It supports multiple UK registration formats and can scrape
+# vehicle information from online sources.
+###############################################################################
+
+# Web scraping function to get vehicle model information
 def getModel(reg):
+    """
+    Retrieves vehicle model information from carcheck.co.uk
+    Args:
+        reg (str): Vehicle registration number to look up
+    Returns:
+        str: Vehicle model description
+    """
     page = requests.get('https://www.carcheck.co.uk/reg?i=' + reg)
     soup = BeautifulSoup(page.text, 'html.parser')
     model = str(soup.find_all('td')[3]).replace("<td>","").replace("</td>","")
     return model
 
-# API authentication headers for DVLA vehicle enquiry service    
+# DVLA API configuration for vehicle lookups
 headers = {
     'x-api-key': '8AaRYbGhKbafmXYTrXPiZ5ZYP0JBRS9F8PkbCwfp',
 }
 
-# Create output file for storing possible registration plates
+# Initialize output file
 f = open("possibleRegPlates.txt", "w")
 
-# Generate list of all uppercase letters A-Z
+###############################################################################
+# Data Preparation
+###############################################################################
+
+# Generate reference list of valid characters
 allLetters = []
 for i in range(26):
     allLetters.append(chr(i+65))
 print(allLetters)
 
-# List of digits 0-9
 allNumbers = [0,1,2,3,4,5,6,7,8,9]
 
+# Initialize counters
 counter = 1
 hitCount = 0
-total = 26 * 26
+total = 26 * 26  # Maximum possible letter combinations
 
 # Get user input registration and convert to uppercase, remove spaces
 targetReg = input("Enter the registration plate to check: ").upper()
 targetReg = targetReg.replace(" ", "")
 wildcards = targetReg.count('?')
+
+###############################################################################
+# Regular Expressions for UK Registration Plate Formats
+###############################################################################
 
 # Regular expressions for different UK registration plate formats
 regexCurrent = '(^[A-Z|?]{2}[0-9|?]{2}[A-Z|?]{3}$)'  # Current format: AB12CDE
@@ -52,6 +74,10 @@ allRegexes = [regexCurrent, regexPrefix, regexSuffix, regexDatelessLongNumberPre
               regexDatelessShortNumberPrefix, regexDatelessLongNumberSuffix, 
               regexDatelessShortNumberSuffix, regexDatelessNorthernIreland, 
               regexDiplomaticPlate]
+
+###############################################################################
+# Function to Generate Possible Registration Plates
+###############################################################################
 
 # Function to generate all possible valid registration plates based on input pattern
 def generate_possible_plates(targetReg):
@@ -186,6 +212,10 @@ def generate_possible_plates(targetReg):
 
     return result
 
+###############################################################################
+# Main Execution
+###############################################################################
+
 # Generate all possible plates matching the input pattern
 possiblePlates = generate_possible_plates(targetReg)
 print(possiblePlates)
@@ -195,6 +225,4 @@ print(f"Generated {len(possiblePlates)} valid plates.")
 f.writelines([plate + '\n' for plate in possiblePlates])
 f.close()
 
-# Commented out code block for checking plates against DVLA API
-# This section would iterate through plates and check against specific criteria
-# ... [existing commented code] ...
+
