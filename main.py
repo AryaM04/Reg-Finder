@@ -23,10 +23,12 @@ def getModel(reg):
     soup = BeautifulSoup(page.text, 'html.parser')
     model = str(soup.find_all('td')[3]).replace("<td>","").replace("</td>","")
     return model
-
+f=open("API_KEY","r")
+API_KEY=f.read().strip()
+f.close()
 # DVLA API configuration for vehicle lookups
 headers = {
-    'x-api-key': '8AaRYbGhKbafmXYTrXPiZ5ZYP0JBRS9F8PkbCwfp',
+    'x-api-key': API_KEY,
 }
 
 # Initialize output file
