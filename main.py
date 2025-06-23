@@ -2,6 +2,7 @@ import requests
 import re
 from bs4 import BeautifulSoup
 from itertools import product
+import math 
 
 ###############################################################################
 # UK Vehicle Registration Plate Finder
@@ -42,7 +43,6 @@ f = open("possibleRegPlates.txt", "w")
 allLetters = []
 for i in range(26):
     allLetters.append(chr(i+65))
-print(allLetters)
 
 allNumbers = [0,1,2,3,4,5,6,7,8,9]
 
@@ -52,9 +52,8 @@ hitCount = 0
 total = 26 * 26  # Maximum possible letter combinations
 
 # Get user input registration and convert to uppercase, remove spaces
-targetReg = input("Enter the registration plate to check: ").upper()
-targetReg = targetReg.replace(" ", "")
-wildcards = targetReg.count('?')
+
+
 
 ###############################################################################
 # Regular Expressions for UK Registration Plate Formats
@@ -214,17 +213,99 @@ def generate_possible_plates(targetReg):
 
     return result
 
+# Make POST request to DVLA API
+def check_dvla(registration):
+    """
+    Check vehicle details using DVLA API
+    Args:
+        registration (str): Vehicle registration number
+    Returns:
+        dict: Vehicle information or None if request fails
+    """
+    url = 'https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles'
+    
+    headers = {
+        'x-api-key': API_KEY,
+        'Content-Type': 'application/json'
+    }
+    
+    data = {
+        'registrationNumber': registration
+    }
+    
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        if response.status_code == 404:
+            return None
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code != 404:  # Only print non-404 errors
+            print(f"HTTP Error checking vehicle {registration}: {e}")
+        return None
+    except requests.exceptions.RequestException as e:
+        print(f"Error checking vehicle {registration}: {e}")
+        return None
 ###############################################################################
 # Main Execution
 ###############################################################################
 
 # Generate all possible plates matching the input pattern
+targetReg = input("Enter the registration plate to check: ").upper()
+targetReg = targetReg.replace(" ", "")
+wildcards = targetReg.count('?')
+print("For the following enter ? if unsure:")
+targetMake = input("Enter the make of the vehicle: ").upper()
+targetModel = input("Enter the model of the vehicle: ").upper()
+targetColour = input("Enter the colour of the vehicle: ").upper()
 possiblePlates = generate_possible_plates(targetReg)
-print(possiblePlates)
 print(f"Generated {len(possiblePlates)} valid plates.")
+possibleHits = []
+total_plates = len(possiblePlates)
+
+# Add progress bar setup
+print("Checking plates with DVLA API:")
+print("[", end="", flush=True)
+
+for idx, plate in enumerate(possiblePlates):
+    # Update progress bar with logarithmic scaling
+    progress = int(50 * (math.log(idx + 1) / math.log(total_plates)))
+    print("\r[" + "=" * progress + " " * (50 - progress) + f"] {idx}/{total_plates}", end="", flush=True)
+    
+    # Check each generated plate against the DVLA API
+    vehicle_info = check_dvla(plate)
+    if vehicle_info:
+        make = vehicle_info.get('make', '').upper()
+        colour = vehicle_info.get('colour', '').upper()
+        
+        # Check if the vehicle matches the user input
+        if (targetMake == '?' or targetMake in make) and \
+           (targetColour == '?' or targetColour in colour):
+            possibleHits.append(plate)
+
+# Complete progress bar
+print("\r[" + "=" * 50 + f"] {total_plates}/{total_plates}")
+hits = []
+for reg in possibleHits:
+    # Get vehicle info again to ensure we have correct details for this registration
+    vehicle_info = check_dvla(reg)
+    if vehicle_info:
+        make = vehicle_info.get('make', '').upper()
+        colour = vehicle_info.get('colour', '').upper()
+        year = vehicle_info.get('yearOfManufacture', 'Unknown')
+        model = getModel(reg)
+        # Changed to check if target model is part of the actual model string
+        if targetModel == '?' or targetModel in model.upper():
+            hitCount += 1
+            hits.append([reg, make, model, colour, year])
+
+print(f"Total matches found: {hitCount}")
+print("hits:")
+for hit in hits:
+    print(f"{hit[0]} - Make: {hit[1]}, Model: {hit[2]} ({hit[4]}), Colour: {hit[3]}")
 
 # Write results to file
-f.writelines([plate + '\n' for plate in possiblePlates])
+for hit in hits:
+    f.write(f"{hit[0]} - Make: {hit[1]}, Model: {hit[2]} ({hit[4]}), Colour: {hit[3]}\n")
 f.close()
-
 
