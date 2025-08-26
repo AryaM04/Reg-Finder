@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RegFinder - Vehicle Registration Search</title>
+    <link rel="stylesheet" href="/regfinder/static/regfinder.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <a href="/" class="back-button">
+                ← Portfolio
+            </a>
+            <h1>RegFinder</h1>
+            <p>Vehicle registration lookup tool</p>
+        </div>
+
+        <div class="form-container">
+            <div class="error-message" id="errorMessage"></div>
+            
+            <div class="intro-section">
+                <p>Search for UK vehicle registrations using partial plates. Built using DVLA data APIs.</p>
+            </div>
+            
+            <form id="searchForm">
+                <div class="form-group">
+                    <label for="registration">Registration Pattern</label>
+                    <input type="text" id="registration" name="registration" placeholder="AB12???" required>
+                    <div class="help-text">Use ? for unknown characters</div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="make">Make</label>
+                        <input type="text" id="make" name="make" placeholder="BMW, Ford...">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="model">Model</label>
+                        <input type="text" id="model" name="model" placeholder="Focus, 3 Series...">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="colour">Colour</label>
+                    <input type="text" id="colour" name="colour" placeholder="Blue, Red, Silver...">
+                    <div class="help-text">Leave blank to search all colours</div>
+                </div>
+
+                <button type="submit" class="search-btn" id="searchBtn">
+                    Search Vehicles
+                </button>
+                
+                <button type="button" class="stop-btn" id="stopBtn">
+                    Stop Search
+                </button>
+            </form>
+        </div>
+
+        <div class="progress-container" id="progressContainer">
+            <div class="progress-text" id="progressText">Checking registrations...</div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="current-plate" id="currentPlate"></div>
+        </div>
+
+        <div class="results-container" id="resultsContainer">
+            <div class="results-header">
+                <div class="results-count" id="resultsCount">0 results</div>
+            </div>
+            <div id="resultsList"></div>
+        </div>
+    </div>
+
+    <script>
+        const searchForm = document.getElementById('searchForm');
+        const searchBtn = document.getElementById('searchBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const progressContainer = document.getElementById('progressContainer');
+        const resultsContainer = document.getElementById('resultsContainer');
+        const progressFill = document.getElementById('progressFill');
+        const progressText = document.getElementById('progressText');
+        const currentPlate = document.getElementById('currentPlate');
+        const resultsCount = document.getElementById('resultsCount');
+        const resultsList = document.getElementById('resultsList');
+        const errorMessage = document.getElementById('errorMessage');
+
+        let pollInterval = null;
+        let lastResultCount = 0;
+
+        searchForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = {
+                registration: document.getElementById('registration').value,
+                make: document.getElementById('make').value || '?',
+                model: document.getElementById('model').value || '?',
+                colour: document.getElementById('colour').value || '?'
+            };
+
+            // Validate registration pattern
+            if (!formData.registration.trim()) {
+                showError('Please enter a registration pattern');
+                return;
+            }
+
+            // Reset UI
+            hideError();
+            progressContainer.style.display = 'block';
+            resultsContainer.style.display = 'none';
+            resultsList.innerHTML = '';
+            lastResultCount = 0;
+            searchBtn.disabled = true;
+            searchBtn.innerHTML = '<span class="loading-spinner"></span>Searching...';
+            stopBtn.style.display = 'block';
+            stopBtn.disabled = false;
+            
+            try {
+                const response = await fetch('/regfinder/search', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                if (!response.ok) {
+                    throw new Error('Search request failed');
+                }
+
+                // Start polling for progress
+                startPolling();
+                
+            } catch (error) {
+                showError('Failed to start search: ' + error.message);
+                resetUI();
+            }
+        });
+
+        stopBtn.addEventListener('click', async () => {
+            stopBtn.disabled = true;
+            stopBtn.innerHTML = '<span class="loading-spinner"></span>Stopping...';
+            
+            try {
+                const response = await fetch('/regfinder/stop', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Stop request failed');
+                }
+            } catch (error) {
+                showError('Failed to stop search: ' + error.message);
+            }
+        });
+
+        function startPolling() {
+            pollInterval = setInterval(async () => {
+                try {
+                    // Get progress
+                    const progressResponse = await fetch('/regfinder/progress');
+                    const progress = await progressResponse.json();
+                    
+                    // Update progress
+                    updateProgress(progress);
+                    
+                    // Get results
+                    const resultsResponse = await fetch('/regfinder/results');
+                    const results = await resultsResponse.json();
+                    
+                    // Update results
+                    updateResults(results);
+                    
+                    // Check if search is complete
+                    if (progress.status === 'complete' || progress.status === 'stopped' || progress.status === 'error') {
+                        stopPolling();
+                        handleSearchComplete(progress.status, results);
+                    }
+                    
+                } catch (error) {
+                    console.error('Polling error:', error);
+                }
+            }, 500); // Poll every 500ms
+        }
+
+        function stopPolling() {
+            if (pollInterval) {
+                clearInterval(pollInterval);
+                pollInterval = null;
+            }
+        }
+
+        function updateProgress(progress) {
+            if (progress.total > 0) {
+                progressText.textContent = `Checking plate ${progress.current} of ${progress.total}`;
+                progressFill.style.width = progress.progress + '%';
+                currentPlate.textContent = `Currently checking: ${progress.plate}`;
+            }
+        }
+
+        function updateResults(results) {
+            // Show new results
+            if (results.results.length > lastResultCount) {
+                if (resultsContainer.style.display === 'none') {
+                    resultsContainer.style.display = 'block';
+                }
+                
+                // Add new results
+                for (let i = lastResultCount; i < results.results.length; i++) {
+                    addResult(results.results[i]);
+                }
+                
+                lastResultCount = results.results.length;
+                resultsCount.textContent = `${results.total_found} result${results.total_found !== 1 ? 's' : ''}`;
+            }
+        }
+
+        function addResult(vehicle) {
+            const resultItem = document.createElement('a');
+            resultItem.className = 'result-item';
+            resultItem.href = `https://www.carcheck.co.uk/reg?i=${vehicle.registration}`;
+            resultItem.target = '_blank';
+            resultItem.title = `Click to view detailed information for ${vehicle.registration}`;
+            resultItem.style.opacity = '0';
+            resultItem.style.transform = 'translateY(20px)';
+            resultItem.innerHTML = `
+                <div class="registration">
+                    ${vehicle.registration}
+                </div>
+                <div class="vehicle-details">
+                    <strong>Make:</strong> ${vehicle.make}<br>
+                    <strong>Model:</strong> ${vehicle.model}<br>
+                    <strong>Colour:</strong> ${vehicle.colour}<br>
+                    <strong>Year:</strong> ${vehicle.year}
+                </div>
+            `;
+            resultsList.appendChild(resultItem);
+            
+            // Animate in
+            setTimeout(() => {
+                resultItem.style.opacity = '1';
+                resultItem.style.transform = 'translateY(0)';
+            }, 10);
+            
+            // Scroll to show new result
+            resultItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        function handleSearchComplete(status, results) {
+            progressContainer.style.display = 'none';
+            
+            if (status === 'stopped') {
+                if (results.total_found > 0) {
+                    resultsCount.textContent = `${results.total_found} result${results.total_found !== 1 ? 's' : ''}`;
+                } else {
+                    resultsContainer.style.display = 'block';
+                    resultsCount.textContent = 'Search stopped';
+                    resultsList.innerHTML = '<div style="text-align: center; color: #6b7280; padding: 20px;">Search was stopped</div>';
+                }
+            } else if (status === 'complete') {
+                if (results.total_found === 0) {
+                    resultsContainer.style.display = 'block';
+                    resultsCount.textContent = 'No results found';
+                    resultsList.innerHTML = '<div style="text-align: center; color: #6b7280; padding: 20px;">No matching vehicles found</div>';
+                } else {
+                    resultsCount.textContent = `${results.total_found} result${results.total_found !== 1 ? 's' : ''}`;
+                }
+            } else if (status === 'error') {
+                showError('Search error occurred');
+            }
+            
+            resetUI();
+        }
+
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.style.display = 'block';
+        }
+
+        function hideError() {
+            errorMessage.style.display = 'none';
+        }
+
+        function resetUI() {
+            searchBtn.disabled = false;
+            searchBtn.innerHTML = 'Search Vehicles';
+            stopBtn.style.display = 'none';
+            stopBtn.disabled = false;
+            stopBtn.innerHTML = 'Stop Search';
+            stopPolling();
+        }
+    </script>
+</body>
+</html>

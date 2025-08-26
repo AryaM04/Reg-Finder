@@ -1,2 +1,6 @@
 possibleRegPlates.txt
 API_KEY
+venv
+__pycache__/
+startweb.sh
+templates/index.html

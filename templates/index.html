@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UK Vehicle Registration Finder</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .form-container {
+            padding: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .help-text {
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .search-btn {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .search-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .search-btn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .stop-btn {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+            margin-top: 10px;
+            display: none;
+        }
+
+        .stop-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .stop-btn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .progress-container {
+            display: none;
+            padding: 30px;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #e0e0e0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 15px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            text-align: center;
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .current-plate {
+            text-align: center;
+            font-family: monospace;
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .results-container {
+            display: none;
+            padding: 30px;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .results-header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .results-count {
+            font-size: 1.5em;
+            color: #2c3e50;
+            font-weight: 600;
+        }
+
+        .result-item {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+        }
+
+        .registration {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+
+        .vehicle-details {
+            color: #666;
+        }
+
+        .error-message {
+            background: #ff6b6b;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚗 UK Vehicle Registration Finder</h1>
+            <p>Find vehicles by partial registration plates using wildcards (?)</p>
+        </div>
+
+        <div class="form-container">
+            <div class="error-message" id="errorMessage"></div>
+            
+            <form id="searchForm">
+                <div class="form-group">
+                    <label for="registration">Registration Plate Pattern:</label>
+                    <input type="text" id="registration" name="registration" placeholder="e.g., AB12???" required>
+                    <div class="help-text">Use ? for unknown characters. Example: AB12??? will find all plates starting with AB12</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="make">Vehicle Make:</label>
+                    <input type="text" id="make" name="make" placeholder="e.g., BMW, Ford, or ? for any">
+                    <div class="help-text">Enter specific make or ? for any make</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="model">Vehicle Model:</label>
+                    <input type="text" id="model" name="model" placeholder="e.g., Focus, 3 Series, or ? for any">
+                    <div class="help-text">Enter specific model or ? for any model</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="colour">Vehicle Colour:</label>
+                    <input type="text" id="colour" name="colour" placeholder="e.g., Blue, Red, or ? for any">
+                    <div class="help-text">Enter specific colour or ? for any colour</div>
+                </div>
+
+                <button type="submit" class="search-btn" id="searchBtn">
+                    🔍 Start Search
+                </button>
+                
+                <button type="button" class="stop-btn" id="stopBtn">
+                    ⏹️ Stop Search
+                </button>
+            </form>
+        </div>
+
+        <div class="progress-container" id="progressContainer">
+            <div class="progress-text" id="progressText">Generating possible plates...</div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="current-plate" id="currentPlate"></div>
+        </div>
+
+        <div class="results-container" id="resultsContainer">
+            <div class="results-header">
+                <div class="results-count" id="resultsCount">0 vehicles found</div>
+            </div>
+            <div id="resultsList"></div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        const searchForm = document.getElementById('searchForm');
+        const searchBtn = document.getElementById('searchBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const progressContainer = document.getElementById('progressContainer');
+        const resultsContainer = document.getElementById('resultsContainer');
+        const progressFill = document.getElementById('progressFill');
+        const progressText = document.getElementById('progressText');
+        const currentPlate = document.getElementById('currentPlate');
+        const resultsCount = document.getElementById('resultsCount');
+        const resultsList = document.getElementById('resultsList');
+        const errorMessage = document.getElementById('errorMessage');
+
+        searchForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = {
+                registration: document.getElementById('registration').value,
+                make: document.getElementById('make').value || '?',
+                model: document.getElementById('model').value || '?',
+                colour: document.getElementById('colour').value || '?'
+            };
+
+            // Validate registration pattern
+            if (!formData.registration.trim()) {
+                showError('Please enter a registration pattern');
+                return;
+            }
+
+            // Reset UI
+            hideError();
+            progressContainer.style.display = 'block';
+            resultsContainer.style.display = 'none';
+            resultsList.innerHTML = ''; // Clear previous results
+            searchBtn.disabled = true;
+            searchBtn.innerHTML = '<span class="loading-spinner"></span>Searching...';
+            stopBtn.style.display = 'block'; // Show stop button
+            stopBtn.disabled = false;
+            
+            try {
+                const response = await fetch('/search', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                if (!response.ok) {
+                    throw new Error('Search request failed');
+                }
+            } catch (error) {
+                showError('Failed to start search: ' + error.message);
+                resetUI();
+            }
+        });
+
+        stopBtn.addEventListener('click', async () => {
+            stopBtn.disabled = true;
+            stopBtn.innerHTML = '<span class="loading-spinner"></span>Stopping...';
+            
+            try {
+                const response = await fetch('/stop', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Stop request failed');
+                }
+            } catch (error) {
+                showError('Failed to stop search: ' + error.message);
+            }
+        });
+
+        socket.on('search_status', (data) => {
+            progressText.textContent = data.message;
+            progressFill.style.width = data.progress + '%';
+        });
+
+        socket.on('search_progress', (data) => {
+            progressText.textContent = `Checking plate ${data.current} of ${data.total}`;
+            progressFill.style.width = data.progress + '%';
+            currentPlate.textContent = `Currently checking: ${data.plate}`;
+        });
+
+        socket.on('vehicle_found', (data) => {
+            // Show results container if not already visible
+            if (resultsContainer.style.display === 'none') {
+                resultsContainer.style.display = 'block';
+            }
+            
+            // Update count
+            resultsCount.textContent = `${data.total_found} vehicle${data.total_found !== 1 ? 's' : ''} found`;
+            
+            // Add the new vehicle to the results
+            const resultItem = document.createElement('div');
+            resultItem.className = 'result-item';
+            resultItem.style.opacity = '0';
+            resultItem.style.transform = 'translateY(20px)';
+            resultItem.innerHTML = `
+                <div class="registration">${data.vehicle.registration}</div>
+                <div class="vehicle-details">
+                    <strong>Make:</strong> ${data.vehicle.make}<br>
+                    <strong>Model:</strong> ${data.vehicle.model}<br>
+                    <strong>Colour:</strong> ${data.vehicle.colour}<br>
+                    <strong>Year:</strong> ${data.vehicle.year}
+                </div>
+            `;
+            resultsList.appendChild(resultItem);
+            
+            // Animate the new result in
+            setTimeout(() => {
+                resultItem.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+                resultItem.style.opacity = '1';
+                resultItem.style.transform = 'translateY(0)';
+            }, 10);
+            
+            // Scroll to show the new result
+            resultItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        });
+
+        socket.on('search_complete', (data) => {
+            progressContainer.style.display = 'none';
+            
+            // If no vehicles were found during the search, show the no results message
+            if (data.total_found === 0) {
+                resultsContainer.style.display = 'block';
+                resultsCount.textContent = 'No vehicles found';
+                resultsList.innerHTML = '<div style="text-align: center; color: #666; padding: 20px;">No matching vehicles found</div>';
+            } else {
+                // Update final count (results should already be displayed from vehicle_found events)
+                resultsCount.textContent = `Search complete: ${data.total_found} vehicle${data.total_found !== 1 ? 's' : ''} found`;
+            }
+            
+            resetUI();
+        });
+
+        socket.on('search_error', (data) => {
+            showError('Search error: ' + data.message);
+            progressContainer.style.display = 'none';
+            resetUI();
+        });
+
+        socket.on('search_stopped', (data) => {
+            progressContainer.style.display = 'none';
+            
+            // Show results if any were found before stopping
+            if (data.total_found > 0) {
+                if (resultsContainer.style.display === 'none') {
+                    resultsContainer.style.display = 'block';
+                }
+                resultsCount.textContent = `Search stopped: ${data.total_found} vehicle${data.total_found !== 1 ? 's' : ''} found`;
+            } else {
+                resultsContainer.style.display = 'block';
+                resultsCount.textContent = 'Search stopped - no vehicles found';
+                resultsList.innerHTML = '<div style="text-align: center; color: #666; padding: 20px;">Search stopped by user</div>';
+            }
+            
+            resetUI();
+        });
+
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.style.display = 'block';
+        }
+
+        function hideError() {
+            errorMessage.style.display = 'none';
+        }
+
+        function resetUI() {
+            searchBtn.disabled = false;
+            searchBtn.innerHTML = '🔍 Start Search';
+            stopBtn.style.display = 'none'; // Hide stop button
+            stopBtn.disabled = false;
+            stopBtn.innerHTML = '⏹️ Stop Search';
+        }
+    </script>
+</body>
+</html>
