@@ -46,31 +46,47 @@ regexDiplomaticPlate = '(^[0-9|?]{3}[DX|??|D?|?X]{1}[0-9|?]{3}$)'
 
 def getModel(reg):
     """Retrieves vehicle model information from carcheck.co.uk"""
+    url = "https://www.instantcarcheck.co.uk/product-selection"
+
+    headers = {
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+    'Accept-Encoding': 'gzip, deflate, br, zstd',
+    'Accept-Language': 'en-GB,en;q=0.6',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'Content-Type': 'application/x-www-form-urlencoded',
+    'Cookie': 'hpi.bucket=1757537341-41',
+    'Host': 'www.instantcarcheck.co.uk',
+    'Origin': 'https://www.instantcarcheck.co.uk',
+    'Pragma': 'no-cache',
+    'Referer': 'https://www.instantcarcheck.co.uk/',
+    'Sec-Fetch-Dest': 'document',
+    'Sec-Fetch-Mode': 'navigate',
+    'Sec-Fetch-Site': 'same-origin',
+    'Sec-Fetch-User': '?1',
+    'Sec-GPC': '1',
+    'Upgrade-Insecure-Requests': '1',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36',
+    'sec-ch-ua': '"Chromium";v="140", "Not=A?Brand";v="24", "Brave";v="140"',
+    'sec-ch-ua-mobile': '?0',
+    'sec-ch-ua-platform': '"Windows"'
+    }
+
+    # POST data with VRM
+    data = "vrm=" + reg
+
     try:
-        page = requests.get('https://www.carcheck.co.uk/reg?i=' + reg, timeout=5)
-        soup = BeautifulSoup(page.text, 'html.parser')
-        
-        # Look for the model in the table structure
-        tables = soup.find_all('table')
-        for table in tables:
-            rows = table.find_all('tr')
-            for row in rows:
-                cells = row.find_all('td')
-                if len(cells) >= 2:
-                    if 'Model' in cells[0].text:
-                        model_text = cells[1].text.strip()
-                        if model_text and model_text != '-':
-                            return model_text
-        
-        # Fallback: try the original method
-        td_elements = soup.find_all('td')
-        if len(td_elements) > 3:
-            model = str(td_elements[3]).replace("<td>","").replace("</td>","").strip()
-            if model and model != '-':
-                return model
-                
-        return "Unknown"
-    except:
+        response = requests.post(url, headers=headers, data=data)
+        soup = BeautifulSoup(response.content, 'html.parser')
+    
+        # Find the div with data-test="carInfo"
+        car_info = soup.find('div', {'data-test': 'carInfo'})
+    
+        if car_info:
+            return car_info.text.strip()
+        else:
+            return "Unknown"
+    except requests.exceptions.RequestException as e:
         return "Unknown"
 
 def generate_possible_plates(targetReg):

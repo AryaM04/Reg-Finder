@@ -4,3 +4,4 @@ venv/
 __pycache__/
 startweb.sh
 templates/index.html
+test.py
