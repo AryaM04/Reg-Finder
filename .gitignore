@@ -1,7 +1,4 @@
-possibleRegPlates.txt
+node_modules/
+.wrangler/
+.dev.vars
 API_KEY
-venv/
-__pycache__/
-startweb.sh
-templates/index.html
-test.py
