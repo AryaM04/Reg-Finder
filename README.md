@@ -40,6 +40,23 @@ A bad search finds all blue Ford Focus cars with a full unknown plate. It makes 
 
 ## Deploy
 
+GitHub Actions deploys the Worker on each push to `main` (`.github/workflows/deploy.yml`). The workflow runs the tests first. If a test fails, it does not deploy.
+
+### Set up the automatic deploys (one time)
+
+1. In the Cloudflare dashboard, go to My Profile > API Tokens.
+2. Create a token from the "Edit Cloudflare Workers" template. Set the account to your account and the zone to `akm.dev`.
+3. Copy your account ID. `npx wrangler whoami` shows it.
+4. In the GitHub repository, go to Settings > Secrets and variables > Actions.
+5. Add the secret `CLOUDFLARE_API_TOKEN` with the token.
+6. Add the secret `CLOUDFLARE_ACCOUNT_ID` with the account ID.
+
+The DVLA API key stays a Worker secret in Cloudflare. A deploy does not change it.
+
+To deploy without a push, open the Actions tab, select "Deploy" and click "Run workflow".
+
+### Deploy by hand
+
 1. Get a DVLA Vehicle Enquiry API key from the DVLA developer portal.
 2. Run `npx wrangler login`.
 3. Run `npx wrangler secret put DVLA_API_KEY` and paste the key.
