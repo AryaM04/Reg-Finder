@@ -14,6 +14,7 @@
     <main class="wrap">
       <a class="back" href="/projects/reg-finder/">← How it works</a>
       <p class="eyebrow">Tool · DVLA data</p>
+      <p class="unlocked" id="unlocked" hidden>Search limit off</p>
       <h1>Reg-Finder</h1>
       <p class="lede">Only caught part of a plate? Type <code>?</code> for the characters you missed, and Reg-Finder checks every valid plate that could match.</p>
 
@@ -28,10 +29,12 @@
             <input id="make" name="make" placeholder="Toyota" autocomplete="off" />
           </div>
           <div>
-            <label for="colour">Colour <span>(optional)</span></label>
-            <input id="colour" name="colour" placeholder="Black" autocomplete="off" />
+            <label for="model">Model <span>(optional)</span></label>
+            <input id="model" name="model" placeholder="MR2" autocomplete="off" />
           </div>
         </div>
+        <label for="colour">Colour <span>(optional)</span></label>
+        <input id="colour" name="colour" placeholder="Black" autocomplete="off" />
 
         <div class="actions">
           <button type="submit" id="search" class="primary">Search</button>
@@ -47,7 +50,7 @@
 
       <section id="results" aria-live="polite"></section>
 
-      <p class="small">The DVLA doesn't share the model, so you can filter by make and colour only. Results show what the DVLA holds today.</p>
+      <p class="small">Make, colour, MOT and tax come from the DVLA. The model comes from a second lookup, one plate at a time, so it can take a little longer to fill in.</p>
     </main>
   </body>
 </html>

@@ -6,11 +6,21 @@ Try it at [akm.dev/regfinder](https://akm.dev/regfinder).
 
 ## How it works
 
-- `public/regfinder/plates.js` makes the candidate plates in the browser. It knows the current, prefix, suffix, dateless, Northern Ireland and diplomatic formats. It uses only the characters that each format allows in each position.
-- `src/index.js` is a Cloudflare Worker. It checks batches of up to 20 plates against the DVLA API. The API key stays a secret on the server.
-- The page filters the results by make and colour. It also shows the fuel type, the engine size and the MOT and tax status.
+- `public/regfinder/plates.js` makes the candidate plates in the browser, one at a time. It knows the current, prefix, suffix, dateless, Northern Ireland and diplomatic formats. It uses only the characters that each format allows in each position.
+- `public/regfinder/queue.js` has two queues:
+  - The DVLA queue checks many plates at the same time. It starts at `DVLA_CONCURRENCY` in `wrangler.toml` (the default is 10). When the DVLA replies 429 ("too many requests"), the queue puts the plate back, halves the concurrency and waits for the time that the DVLA gives. After a run of successes, it adds one to the concurrency again, up to the start value.
+  - The model queue gets the model of each match from instantcarcheck.co.uk. It sends one request at a time, with a 100 ms gap, which is the same rate as the Flask version. Do not make it faster, or the site can block the Worker.
+- `src/index.js` is a Cloudflare Worker. It checks one plate for each request, so that the browser queue controls the concurrency. The DVLA API key stays a secret on the server.
+- The page filters the results by make, model and colour. It also shows the fuel type, the engine size and the MOT and tax status.
+- When a search is done, the page shows a desktop notification. The browser asks for permission on the first search.
 
-The DVLA API does not give the model of a vehicle. Thus, you cannot filter by model.
+The DVLA does not publish one concurrency limit for the Vehicle Enquiry API. It sets a limit in requests for each second for each API key. If you know the limit of your key, set `DVLA_CONCURRENCY` to that value.
+
+## Search limit
+
+The page allows a maximum of 3,000 plates for each search, to protect the API quota. To remove the limit, type `unlock` when no text box has focus. A "Search limit off" badge shows. Type `unlock` again to turn the limit back on.
+
+CAUTION: Large searches use many DVLA requests and many Worker requests. The free Workers plan allows 100,000 requests each day.
 
 ## Example searches
 
@@ -21,7 +31,7 @@ A good search finds all BMW vehicles with plates that start with AB12X:
 - Registration: `AB12X??`
 - Make: `BMW`
 
-A bad search finds all blue Fords with a full unknown plate. It makes too many plates, and the page refuses it.
+A bad search finds all blue Ford Focus cars with a full unknown plate. It makes millions of plates.
 
 ## Test
 
@@ -36,8 +46,6 @@ A bad search finds all blue Fords with a full unknown plate. It makes too many p
 4. Run `npm run deploy`.
 
 The route in `wrangler.toml` sends `akm.dev/regfinder*` to the Worker. The portfolio on Cloudflare Pages serves all other paths on `akm.dev`. The page uses the fonts and the icon of the portfolio.
-
-CAUTION: Each plate is one DVLA request. The page allows a maximum of 3,000 plates for each search, to protect the API quota.
 
 ## History
 

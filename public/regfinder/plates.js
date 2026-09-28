@@ -49,18 +49,31 @@ export function countPlates(pattern) {
   }, 0);
 }
 
-/** All matching plates, with no duplicates. */
-export function generatePlates(pattern) {
-  const p = normalise(pattern);
-  const plates = new Set();
-  for (const f of FORMATS) {
-    const c = choices(p, f);
-    if (!c) continue;
-    let partial = [''];
-    for (const set of c) partial = partial.flatMap((head) => [...set].map((ch) => head + ch));
-    partial.forEach((plate) => plates.add(plate));
-  }
-  return [...plates];
+/** True if the plate fits the format. */
+const fits = (plate, format) => plate.length === format.length && [...plate].every((c, i) => format[i].includes(c));
+
+/** Every combination of one character from each slot, in order. */
+function* combine(slots, head = '') {
+  if (head.length === slots.length) return yield head;
+  for (const c of slots[head.length]) yield* combine(slots, head + c);
 }
+
+/**
+ * All matching plates, one at a time, with no duplicates. It does not keep a list, so large searches use little memory.
+ * A plate that also fits an earlier format is a duplicate, so it is skipped.
+ */
+export function* iteratePlates(pattern) {
+  const p = normalise(pattern);
+  const fitting = FORMATS.map((f) => choices(p, f));
+  for (let i = 0; i < FORMATS.length; i++) {
+    if (!fitting[i]) continue;
+    for (const plate of combine(fitting[i])) {
+      if (!FORMATS.slice(0, i).some((f, j) => fitting[j] && fits(plate, f))) yield plate;
+    }
+  }
+}
+
+/** All matching plates as a list. Use iteratePlates for large patterns. */
+export const generatePlates = (pattern) => [...iteratePlates(pattern)];
 
 export const normalise = (pattern) => pattern.toUpperCase().replace(/\s+/g, '');

@@ -1,16 +1,21 @@
 import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
-import worker from '../src/index.js';
+import worker, { carInfoText } from '../src/index.js';
 
 const realFetch = globalThis.fetch;
 afterEach(() => (globalThis.fetch = realFetch));
 
-/** A fake DVLA. It knows one vehicle and fails for plates that start with "ERR". */
-function fakeDvla() {
+/** A fake DVLA and a fake model site. The DVLA knows one vehicle. Plates that start with "SLOW" get a 429. */
+function fakeServices() {
   const calls = [];
-  globalThis.fetch = async (_url, init) => {
+  globalThis.fetch = async (url, init) => {
+    if (url.includes('instantcarcheck')) {
+      calls.push({ site: 'model', body: init.body });
+      return new Response('<html><div data-test="carInfo"><div><span>TOYOTA</span> MR2 GT-I</div></div><div>other</div></html>');
+    }
     const { registrationNumber } = JSON.parse(init.body);
-    calls.push({ key: init.headers['x-api-key'], plate: registrationNumber });
+    calls.push({ site: 'dvla', key: init.headers['x-api-key'], plate: registrationNumber });
+    if (registrationNumber.startsWith('SLOW')) return new Response('', { status: 429, headers: { 'Retry-After': '3' } });
     if (registrationNumber.startsWith('ERR')) return new Response('', { status: 500 });
     if (registrationNumber !== 'T377DBW') return new Response('', { status: 404 });
     return Response.json({ make: 'TOYOTA', colour: 'BLACK', yearOfManufacture: 1999, motStatus: 'Valid', taxStatus: 'Taxed' });
@@ -18,55 +23,76 @@ function fakeDvla() {
   return calls;
 }
 
-const env = { DVLA_API_KEY: 'test-key', ASSETS: { fetch: () => new Response('page') } };
-const lookup = (body, headers = {}) =>
+const env = { DVLA_API_KEY: 'test-key', DVLA_CONCURRENCY: '6', ASSETS: { fetch: () => new Response('page') } };
+const post = (path, body, headers = {}, e = env) =>
   worker.fetch(
-    new Request('https://akm.dev/regfinder/api/lookup', {
+    new Request(`https://akm.dev/regfinder/api/${path}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...headers },
       body: JSON.stringify(body),
     }),
-    env,
+    e,
   );
 
-test('the lookup returns only registered vehicles', async () => {
-  const calls = fakeDvla();
-  const response = await lookup({ plates: ['T377DBW', 'T377DBX'] });
-  assert.equal(response.status, 200);
-  const data = await response.json();
-  assert.equal(data.vehicles.length, 1);
-  assert.equal(data.vehicles[0].make, 'TOYOTA');
-  assert.equal(data.vehicles[0].mot, 'Valid');
-  assert.equal(data.failed, 0);
-  assert.ok(calls.every((c) => c.key === 'test-key'));
+test('the config gives the start concurrency', async () => {
+  const data = await (await worker.fetch(new Request('https://akm.dev/regfinder/api/config'), env)).json();
+  assert.equal(data.concurrency, 6);
+  const fallback = await (await worker.fetch(new Request('https://akm.dev/regfinder/api/config'), { ASSETS: env.ASSETS })).json();
+  assert.equal(fallback.concurrency, 10);
 });
 
-test('DVLA errors are counted, not hidden', async () => {
-  fakeDvla();
-  const data = await (await lookup({ plates: ['ERR1', 'T377DBW'] })).json();
-  assert.equal(data.failed, 1);
-  assert.equal(data.vehicles.length, 1);
+test('the lookup returns a registered vehicle', async () => {
+  const calls = fakeServices();
+  const data = await (await post('lookup', { plate: 'T377DBW' })).json();
+  assert.equal(data.vehicle.make, 'TOYOTA');
+  assert.equal(data.vehicle.mot, 'Valid');
+  assert.equal(calls[0].key, 'test-key');
 });
 
-test('the lookup refuses bad input', async () => {
-  fakeDvla();
-  for (const plates of [[], Array(21).fill('AB12CDE'), ['AB12 CDE'], ['<script>'], 'AB12CDE']) {
-    assert.equal((await lookup({ plates })).status, 400, JSON.stringify(plates));
+test('the lookup returns null for a plate that is not registered', async () => {
+  fakeServices();
+  assert.deepEqual(await (await post('lookup', { plate: 'T377DBX' })).json(), { vehicle: null });
+});
+
+test('a DVLA throttle goes back to the browser with the wait time', async () => {
+  fakeServices();
+  const response = await post('lookup', { plate: 'SLOW1' });
+  assert.equal(response.status, 429);
+  assert.equal((await response.json()).retryAfter, 3);
+});
+
+test('other DVLA errors give status 502', async () => {
+  fakeServices();
+  assert.equal((await post('lookup', { plate: 'ERR1' })).status, 502);
+});
+
+test('the model lookup reads the car info from the page', async () => {
+  const calls = fakeServices();
+  const data = await (await post('model', { plate: 'T377DBW' })).json();
+  assert.equal(data.model, 'TOYOTA MR2 GT-I');
+  assert.equal(calls[0].body, 'vrm=T377DBW');
+});
+
+test('carInfoText handles nested and missing elements', () => {
+  assert.equal(carInfoText('<div data-test="carInfo">A <div>B</div> C</div><div>D</div>'), 'A B C');
+  assert.equal(carInfoText('<div>nothing</div>'), null);
+});
+
+test('the API refuses bad input', async () => {
+  fakeServices();
+  for (const body of [{}, { plate: '' }, { plate: 'AB12 CDE' }, { plate: '<script>' }, { plate: ['AB12CDE'] }]) {
+    assert.equal((await post('lookup', body)).status, 400, JSON.stringify(body));
   }
 });
 
-test('the lookup refuses requests from other sites', async () => {
-  fakeDvla();
-  assert.equal((await lookup({ plates: ['T377DBW'] }, { Origin: 'https://evil.example' })).status, 403);
-  assert.equal((await lookup({ plates: ['T377DBW'] }, { Origin: 'https://akm.dev' })).status, 200);
+test('the API refuses requests from other sites', async () => {
+  fakeServices();
+  assert.equal((await post('lookup', { plate: 'T377DBW' }, { Origin: 'https://evil.example' })).status, 403);
+  assert.equal((await post('lookup', { plate: 'T377DBW' }, { Origin: 'https://akm.dev' })).status, 200);
 });
 
 test('the lookup says so when the API key is missing', async () => {
-  const response = await worker.fetch(
-    new Request('https://akm.dev/regfinder/api/lookup', { method: 'POST', body: '{"plates":["T377DBW"]}' }),
-    { ASSETS: env.ASSETS },
-  );
-  assert.equal(response.status, 503);
+  assert.equal((await post('lookup', { plate: 'T377DBW' }, {}, { ASSETS: env.ASSETS })).status, 503);
 });
 
 test('other paths go to the static files', async () => {

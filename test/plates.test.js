@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { countPlates, generatePlates } from '../public/regfinder/plates.js';
+import { countPlates, generatePlates, iteratePlates } from '../public/regfinder/plates.js';
 
 test('a full current plate gives only that plate', () => {
   assert.deepEqual(generatePlates('AB12CDE'), ['AB12CDE']);
@@ -44,4 +44,12 @@ test('the count is an upper limit for the list', () => {
 
 test('a pattern that fits no format gives no plates', () => {
   assert.deepEqual(generatePlates('!!!!'), []);
+});
+
+test('the iterator gives plates one at a time without making the full list', () => {
+  // Seven unknown characters make millions of plates. Take only the first ten.
+  const it = iteratePlates('???????');
+  const first = Array.from({ length: 10 }, () => it.next().value);
+  assert.equal(new Set(first).size, 10);
+  assert.ok(countPlates('???????') > 1_000_000);
 });
