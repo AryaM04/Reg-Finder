@@ -1,0 +1,19 @@
+name = "regfinder"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+
+# The Worker serves akm.dev/regfinder. The rest of akm.dev stays on Cloudflare Pages.
+routes = [{ pattern = "akm.dev/regfinder*", zone_name = "akm.dev" }]
+
+[assets]
+directory = "public"
+binding = "ASSETS"
+run_worker_first = ["/regfinder/api/*"]
+
+[vars]
+# The start concurrency of the DVLA queue. The DVLA sets the real limit for each API key.
+# The page halves the concurrency when the DVLA replies 429, then slowly raises it again up to this value.
+DVLA_CONCURRENCY = "10"
+
+# Set the DVLA API key as a secret. Do not put it in this file.
+#   npx wrangler secret put DVLA_API_KEY
