@@ -98,3 +98,19 @@ test('the lookup says so when the API key is missing', async () => {
 test('other paths go to the static files', async () => {
   assert.equal(await (await worker.fetch(new Request('https://akm.dev/regfinder/'), env)).text(), 'page');
 });
+
+test('searches at the same time get only their own results', async () => {
+  // The Flask version kept results in global variables, so two people saw each other's results.
+  // The Worker keeps no state between requests. Each request returns only the vehicle for its own plate.
+  globalThis.fetch = async (url, init) => {
+    const { registrationNumber } = JSON.parse(init.body);
+    await new Promise((r) => setTimeout(r, Math.random() * 20));
+    return Response.json({ make: `MAKE-${registrationNumber}`, colour: 'BLACK' });
+  };
+  const plates = Array.from({ length: 40 }, (_, i) => `AB${String(i).padStart(2, '0')}CDE`);
+  const results = await Promise.all(plates.map((plate) => post('lookup', { plate }).then((r) => r.json())));
+  results.forEach((data, i) => {
+    assert.equal(data.vehicle.registration, plates[i]);
+    assert.equal(data.vehicle.make, `MAKE-${plates[i]}`);
+  });
+});
