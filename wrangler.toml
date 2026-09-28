@@ -1,0 +1,14 @@
+name = "regfinder"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+
+# The Worker serves akm.dev/regfinder. The rest of akm.dev stays on Cloudflare Pages.
+routes = [{ pattern = "akm.dev/regfinder*", zone_name = "akm.dev" }]
+
+[assets]
+directory = "public"
+binding = "ASSETS"
+run_worker_first = ["/regfinder/api/*"]
+
+# Set the DVLA API key as a secret. Do not put it in this file.
+#   npx wrangler secret put DVLA_API_KEY
