@@ -50,8 +50,13 @@ function notify(title, body) {
 }
 
 function card(v) {
-  const el = document.createElement('article');
+  // Each result opens the full vehicle check on carcheck.co.uk, like the Flask version.
+  const el = document.createElement('a');
   el.className = 'vehicle';
+  el.href = `https://www.carcheck.co.uk/reg?i=${encodeURIComponent(v.registration)}`;
+  el.target = '_blank';
+  el.rel = 'noopener noreferrer';
+  el.title = `Open the full check for ${v.registration} on carcheck.co.uk`;
   const title = document.createElement('p');
   title.className = 'reg';
   title.textContent = v.registration;
