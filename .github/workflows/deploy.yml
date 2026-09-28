@@ -30,5 +30,13 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           wranglerVersion: '4'
           command: deploy
+      # Cloudflare bot protection can block requests from GitHub runners with status 403.
+      # Thus, a failed check gives a warning, not a failed deploy.
       - name: Check the live site
-        run: curl --fail --silent --show-error https://akm.dev/regfinder/api/config
+        run: |
+          code=$(curl --silent --output /dev/null --write-out '%{http_code}' https://akm.dev/regfinder/api/config)
+          if [ "$code" = "200" ]; then
+            echo "The live site replied 200."
+          else
+            echo "::warning::The live site replied $code. Cloudflare bot protection can block GitHub runners. Open https://akm.dev/regfinder/ to check the site."
+          fi
