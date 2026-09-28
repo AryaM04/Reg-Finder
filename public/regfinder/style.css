@@ -41,7 +41,9 @@ button:disabled { opacity: 0.5; cursor: wait; }
 .bar { height: 6px; border-radius: 3px; background: var(--surface); overflow: hidden; }
 .bar span { display: block; height: 100%; width: 0; background: var(--neon); transition: width 0.3s; }
 #results { display: grid; gap: 10px; margin-top: 20px; }
-.vehicle { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+.vehicle { display: block; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; color: inherit; text-decoration: none; transition: border-color 0.2s, transform 0.2s; }
+.vehicle:hover, .vehicle:focus-visible { border-color: var(--neon); transform: translateY(-1px); }
+.vehicle::after { content: 'Full check on carcheck.co.uk ↗'; display: block; margin-top: 6px; font-size: 0.78rem; color: var(--neon); }
 .reg { display: inline-block; background: var(--plate); color: #111; font: 800 1.05rem 'Syne', system-ui, sans-serif; letter-spacing: 0.06em; padding: 2px 10px; border-radius: 4px; margin-bottom: 6px; }
 .small { margin-top: 36px; font-size: 0.8rem; color: var(--dim); }
 @media (max-width: 520px) { .row { grid-template-columns: 1fr; } }
