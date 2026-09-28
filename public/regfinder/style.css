@@ -50,3 +50,8 @@ button:disabled { opacity: 0.5; cursor: wait; }
 .unlocked { display: inline-block; margin-top: 12px; padding: 2px 10px; border-radius: 999px; background: rgba(255, 210, 62, 0.15); color: var(--plate); font: 500 0.72rem 'JetBrains Mono', monospace; letter-spacing: 0.1em; text-transform: uppercase; }
 .unlocked[hidden] { display: none; }
 .model { color: var(--muted); }
+.toolbar { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+.toolbar[hidden] { display: none; }
+.toolbar label { margin: 0; }
+select { padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: 0.9rem; }
+select:focus { outline: 2px solid var(--neon); outline-offset: 1px; }

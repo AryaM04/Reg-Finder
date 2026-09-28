@@ -1,5 +1,6 @@
 import { countPlates, iteratePlates, normalise } from './plates.js';
 import { SerialQueue, runQueue } from './queue.js';
+import { SORTS, sortResults } from './sort.js';
 
 /** The largest search that the page allows. Each plate is one DVLA request. Type "unlock" outside a text box to remove the limit. */
 const MAX_PLATES = 3000;
@@ -10,6 +11,17 @@ const $ = (id) => document.getElementById(id);
 let unlocked = false;
 let stopped = false;
 let concurrency = 10;
+/** The results of the current search: { vehicle, model, index, el }. */
+let results = [];
+
+for (const [key, { label }] of Object.entries(SORTS)) $('sort').append(new Option(label, key));
+
+/** Puts the result cards in the order that the user picked. append() moves a card that is already on the page. */
+function render() {
+  $('results').append(...sortResults(results, $('sort').value).map((r) => r.el));
+  $('toolbar').hidden = results.length < 2;
+}
+$('sort').addEventListener('change', render);
 
 fetch('/regfinder/api/config')
   .then((r) => r.json())
@@ -94,6 +106,10 @@ async function search(event) {
   $('stop').hidden = false;
   $('progress').hidden = false;
   $('results').replaceChildren();
+  results = [];
+  $('toolbar').hidden = true;
+  $('status').textContent = 'Starting the search…';
+  $('fill').style.width = '0%';
   let checked = 0;
   let found = 0;
   let failed = 0;
@@ -107,14 +123,16 @@ async function search(event) {
   };
 
   // The model queue: one request at a time, with a gap, so that the model site does not block us.
-  const modelQueue = new SerialQueue(async ({ plate, cardParts }) => {
+  const modelQueue = new SerialQueue(async ({ plate, cardParts, result }) => {
     const data = await (await post('model', plate)).json().catch(() => ({}));
-    const name = data.model ?? 'Model unknown';
-    cardParts.model.textContent = name;
+    cardParts.model.textContent = data.model ?? 'Model unknown';
+    result.model = data.model ?? null;
     if (model && data.model && !data.model.toUpperCase().includes(model)) {
       cardParts.el.remove();
+      results = results.filter((r) => r !== result);
       found--;
     }
+    if ($('sort').value === 'model') render();
     status();
   }, MODEL_GAP_MS);
 
@@ -135,8 +153,10 @@ async function search(event) {
       if (v && (!make || v.make.toUpperCase().includes(make)) && (!colour || v.colour.toUpperCase().includes(colour))) {
         found++;
         const cardParts = card(v);
-        $('results').append(cardParts.el);
-        modelQueue.push({ plate, cardParts });
+        const result = { vehicle: v, model: null, index: results.length, el: cardParts.el };
+        results.push(result);
+        render();
+        modelQueue.push({ plate, cardParts, result });
       }
       status();
     },
