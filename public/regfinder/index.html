@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0c0a13" />
+    <title>Reg-Finder · Arya Mortazavi</title>
+    <meta name="description" content="Find UK vehicles from a partial number plate, using live DVLA data." />
+    <link rel="icon" href="/assets/favicon/akm.ico" />
+    <link rel="stylesheet" href="/regfinder/style.css" />
+    <script type="module" src="/regfinder/app.js"></script>
+  </head>
+  <body>
+    <main class="wrap">
+      <a class="back" href="/projects/reg-finder/">← How it works</a>
+      <p class="eyebrow">Tool · DVLA data</p>
+      <p class="unlocked" id="unlocked" hidden>Search limit off</p>
+      <h1>Reg-Finder</h1>
+      <p class="lede">Only caught part of a plate? Type <code>?</code> for the characters you missed, and Reg-Finder checks every valid plate that could match.</p>
+
+      <form id="form" class="card" novalidate>
+        <label for="plate">Registration</label>
+        <input id="plate" name="plate" class="plate" placeholder="AB12 C??" autocomplete="off" spellcheck="false" maxlength="10" required />
+        <p class="hint" id="count" aria-live="polite">Use ? for each unknown character.</p>
+
+        <div class="row">
+          <div>
+            <label for="make">Make <span>(optional)</span></label>
+            <input id="make" name="make" placeholder="Toyota" autocomplete="off" />
+          </div>
+          <div>
+            <label for="model">Model <span>(optional)</span></label>
+            <input id="model" name="model" placeholder="MR2" autocomplete="off" />
+          </div>
+        </div>
+        <label for="colour">Colour <span>(optional)</span></label>
+        <input id="colour" name="colour" placeholder="Black" autocomplete="off" />
+
+        <div class="actions">
+          <button type="submit" id="search" class="primary">Search</button>
+          <button type="button" id="stop" hidden>Stop</button>
+        </div>
+        <p class="error" id="error" role="alert"></p>
+      </form>
+
+      <section id="progress" hidden>
+        <div class="bar"><span id="fill"></span></div>
+        <p class="hint" id="status"></p>
+      </section>
+
+      <section id="results" aria-live="polite"></section>
+
+      <p class="small">Make, colour, MOT and tax come from the DVLA. The model comes from a second lookup, one plate at a time, so it can take a little longer to fill in.</p>
+    </main>
+  </body>
+</html>
